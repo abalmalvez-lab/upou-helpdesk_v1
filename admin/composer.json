@@ -1,0 +1,8 @@
+{
+    "name": "upou/helpdesk-admin",
+    "description": "UPOU HelpDesk Admin — DynamoDB ticket management",
+    "require": {
+        "php": ">=8.1",
+        "aws/aws-sdk-php": "^3.300"
+    }
+}
