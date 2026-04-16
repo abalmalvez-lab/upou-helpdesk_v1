@@ -24,7 +24,7 @@ This guide explains *why* each step exists. For just the commands without explan
 
 ---
 
-## 1. Architecture overview
+## 1.  Logical Architecture Overview
 
 ```mermaid
 flowchart TD
