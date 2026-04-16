@@ -142,12 +142,20 @@ This builds the Lambda, uploads the policy index, and runs end-to-end verificati
 cd /var/www/upou-helpdesk
 chmod +x scripts/*.sh
 export OPENAI_API_KEY='your-key'
+export OPENAI_BASE_URL='https://is215-openai.upou.io/v1'
 export S3_BUCKET='upou-helpdesk-2026-yourinitials'
 
 ./scripts/deploy_all.sh
-```
 
+# Fixing the known bugs on admin Apache vhost (port 8080)
+./scripts/diagnose-admin-8080.sh
+
+```
 The script prints `✓` for each step and ends with a green `=== Deploy complete ===` plus the elapsed time.
+
+Manually configuring the Lambda environment variable due to the identified bug on shell script that not accepting special character `/` of an environment variable.
+`Key: OPENAI_BASE_URL`
+`Value: https://is215-openai.upou.io/v1`
 
 ## Step 7 — Verify
 
