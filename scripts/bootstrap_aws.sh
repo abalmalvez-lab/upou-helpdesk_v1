@@ -118,13 +118,16 @@ fi
 # ---- 4. Lambda environment variables -------------------------------------
 color_phase "Step 4: Lambda environment variables"
 
+BASE_URL="${OPENAI_BASE_URL:-https://is215-openai.upou.io/v1}"
+echo "Will set BASE_URL=[$BASE_URL]"    # verify first
+
 aws lambda update-function-configuration \
     --function-name "$FUNCTION_NAME" \
     --runtime python3.11 \
     --memory-size 512 \
     --timeout 30 \
-    --environment "Variables={OPENAI_API_KEY=$OPENAI_API_KEY,OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://is215-openai.upou.io/v1},OPENAI_MODEL=gpt-4o-mini,S3_BUCKET=$S3_BUCKET,S3_PREFIX=logs/,POLICY_INDEX_KEY=policy_index.json,DDB_TICKETS_TABLE=$DDB_TABLE,KEYWORD_THRESHOLD=0.15}" \
-    --region "$REGION" >/dev/null
+    --environment "Variables={OPENAI_API_KEY=$OPENAI_API_KEY,OPENAI_BASE_URL=$BASE_URL,OPENAI_MODEL=gpt-4o-mini,S3_BUCKET=$S3_BUCKET,S3_PREFIX=logs/,POLICY_INDEX_KEY=policy_index.json,DDB_TICKETS_TABLE=$DDB_TABLE,KEYWORD_THRESHOLD=0.15}" \
+    --region "$REGION"
 
 aws lambda wait function-updated --function-name "$FUNCTION_NAME" --region "$REGION"
 color_ok "Env vars set"
