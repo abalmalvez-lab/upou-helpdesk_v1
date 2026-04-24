@@ -240,7 +240,9 @@ To verify: `echo -n "$OPENAI_API_KEY" | wc -c` should be one number around 100-1
 
 **Root cause:** SELinux on Amazon Linux 2023 only allows httpd on a fixed list of ports (80, 443, etc.). Port 8080 is not in the default list.
 
-**Prevention:** Run once: `sudo semanage port -a -t http_port_t -p tcp 8080`. Already in the install commands.
+**Prevention:** `scripts/deploy_admin.sh` automatically registers port 8080 with SELinux on every run, installing `policycoreutils-python-utils` first if `semanage` is missing. The script is idempotent — re-running just verifies the port is registered.
+
+For manual deploy without the script: `sudo semanage port -a -t http_port_t -p tcp 8080`
 
 ---
 
@@ -304,7 +306,31 @@ sudo systemctl restart httpd
 
 ---
 
-## How the deploy scripts protect you
+## I25 — Admin app returns 404 because vhost DocumentRoot doesn't match
+
+**Symptom:** `Not Found - The requested URL was not found on this server.` when visiting port 8080. Apache is listening on 8080, the vhost is loaded, but every URL returns 404.
+
+**Root cause:** The shipped `admin/docs/upou-admin.conf` template has `DocumentRoot /var/www/upou-admin/public` (assuming admin is a separate top-level project). When the admin app is nested inside the helpdesk repo at `/var/www/upou-helpdesk/admin/public`, that DocumentRoot points nowhere.
+
+**Prevention:** `scripts/deploy_admin.sh` auto-detects the actual project location and rewrites the vhost's DocumentRoot to match. Specifically, it does:
+```bash
+sed -i "s|/var/www/upou-admin/|$ADMIN_DIR/|g" "$VHOST_DEST"
+```
+where `$ADMIN_DIR` is the script's auto-detected path to the admin folder. Works whether the project is at `/var/www/upou-helpdesk/admin/` or anywhere else.
+
+**Manual fix:** Edit `/etc/httpd/conf.d/upou-admin.conf` and change every `/var/www/upou-admin/` path to wherever your admin app actually lives, then `sudo systemctl restart httpd`.
+
+---
+
+## I26 — Admin DB password mismatch between MySQL user and Apache vhost
+
+**Symptom:** Admin login or signup returns 500. `php-fpm` log shows `SQLSTATE[HY000] [1045] Access denied for user 'upou_admin_app'@'localhost'`.
+
+**Root cause:** The MySQL user was created with one password, but the vhost's `SetEnv DB_PASS` says a different one. Easy to do when re-running schema imports manually.
+
+**Prevention:** `scripts/deploy_admin.sh` reads any existing password from the vhost first, tests it against MySQL, and either reuses it (if working) or generates a new one and runs `ALTER USER ... IDENTIFIED BY` to keep them in sync. The schema import always ends with the password sync, so re-runs cannot drift out of sync.
+
+---
 
 Every issue above is either:
 

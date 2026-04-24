@@ -22,6 +22,7 @@ $pageTitle = $pageTitle ?? 'UPOU AI HelpDesk';
     <nav class="nav">
       <?php if ($currentUser): ?>
         <a href="/chat.php"><i class="fa-solid fa-comments"></i> Chat</a>
+        <a href="/my_tickets.php"><i class="fa-solid fa-ticket"></i> My Tickets</a>
         <a href="/history.php"><i class="fa-solid fa-clock-rotate-left"></i> History</a>
         <span class="user-pill"><i class="fa-solid fa-user"></i> <?= htmlspecialchars($currentUser['username']) ?></span>
         <a class="btn btn-outline" href="/logout.php"><i class="fa-solid fa-arrow-right-from-bracket"></i> Logout</a>

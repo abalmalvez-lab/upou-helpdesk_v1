@@ -6,7 +6,7 @@ require __DIR__ . '/../views/partials/header.php';
 ?>
 <div class="card">
   <h2><i class="fa-solid fa-comments"></i> Ask the HelpDesk</h2>
-  <p class="lead">Questions are answered using official UPOU policies. If we can't answer, a human agent will follow up.</p>
+  <p class="lead">Questions are answered using official UPOU policies. If we can't answer, you can choose to forward your question to a human agent.</p>
 </div>
 
 <div class="chat-shell">
@@ -81,6 +81,68 @@ function renderBot(data) {
   thread.scrollTop = thread.scrollHeight;
 }
 
+function renderEscalationPrompt(data) {
+  const div = document.createElement('div');
+  div.className = 'msg';
+  let html = '<div class="msg-bot">';
+  html += '<span class="source-badge badge-human"><i class="fa-solid fa-headset"></i> Needs Human Review</span>';
+  html += '<div>' + escapeHtml(data.answer) + '</div>';
+  html += '<div class="escalation-prompt" style="margin-top: 1rem; padding: 1rem; border: 1px solid var(--border, #555); border-radius: 8px; background: rgba(255,255,255,0.03);">';
+  html += '<p style="margin: 0 0 0.75rem 0;"><i class="fa-solid fa-circle-question"></i> <strong>Would you like to forward this question to a human agent?</strong></p>';
+  html += '<div style="display: flex; gap: 0.75rem;">';
+  html += '<button class="btn btn-primary escalate-yes" style="padding: 0.5rem 1.5rem;"><i class="fa-solid fa-check"></i> Yes, forward it</button>';
+  html += '<button class="btn escalate-no" style="padding: 0.5rem 1.5rem; background: #666; color: #fff;"><i class="fa-solid fa-xmark"></i> No thanks</button>';
+  html += '</div></div>';
+  html += '</div>';
+  div.innerHTML = html;
+  thread.appendChild(div);
+  thread.scrollTop = thread.scrollHeight;
+
+  // Yes button — create the ticket
+  div.querySelector('.escalate-yes').addEventListener('click', async function() {
+    const promptDiv = div.querySelector('.escalation-prompt');
+    promptDiv.innerHTML = '<p><i class="fa-solid fa-spinner fa-spin"></i> Creating ticket...</p>';
+
+    try {
+      const res = await fetch('/api_escalate.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question: data._original_question,
+          ai_attempt: data.answer,
+          top_similarity: data.top_similarity || 0,
+        })
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Escalation failed');
+
+      promptDiv.innerHTML =
+        '<div class="ticket-note" style="margin: 0;">' +
+        '<i class="fa-solid fa-check-circle" style="color: #4caf50;"></i> ' +
+        '<strong>Ticket created!</strong> A human agent will follow up.' +
+        '<br/><i class="fa-solid fa-ticket"></i> Ticket ID: <code>' + escapeHtml(result.ticket_id) + '</code>' +
+        '<br/><small>You can track your ticket status on the <a href="/my_tickets.php">My Tickets</a> page.</small>' +
+        '</div>';
+    } catch (err) {
+      promptDiv.innerHTML =
+        '<div style="color: #f44336;">' +
+        '<i class="fa-solid fa-triangle-exclamation"></i> ' +
+        escapeHtml(err.message) +
+        '</div>';
+    }
+  });
+
+  // No button — dismiss the prompt
+  div.querySelector('.escalate-no').addEventListener('click', function() {
+    const promptDiv = div.querySelector('.escalation-prompt');
+    promptDiv.innerHTML =
+      '<div style="color: #aaa;">' +
+      '<i class="fa-solid fa-info-circle"></i> ' +
+      'No ticket created. Feel free to rephrase your question or try again later.' +
+      '</div>';
+  });
+}
+
 function renderError(msg) {
   const div = document.createElement('div');
   div.className = 'msg';
@@ -107,7 +169,14 @@ form.addEventListener('submit', async (e) => {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Request failed');
-    renderBot(data);
+
+    if (data.source_label === 'Needs Human Review') {
+      // Show Yes/No confirmation instead of auto-creating a ticket
+      data._original_question = question;
+      renderEscalationPrompt(data);
+    } else {
+      renderBot(data);
+    }
   } catch (err) {
     renderError(err.message);
   } finally {

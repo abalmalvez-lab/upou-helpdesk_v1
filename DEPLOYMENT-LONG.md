@@ -24,39 +24,37 @@ This guide explains *why* each step exists. For just the commands without explan
 
 ---
 
-## 1.  Logical Architecture Overview
+## 1. Architecture overview
 
-```mermaid
-flowchart TD
-    Browser([Browser])
-
-    subgraph EC2 ["🖥️ EC2 Instance — Apache + PHP 8"]
-        direction LR
-        Student["<b>Student helpdesk</b><br/>Sessions: PHP<br/>DB: upou_helpdesk"]
-        Admin["<b>Admin console</b><br/>Sessions: ADMIN<br/>DB: upou_admin"]
-    end
-
-    Lambda["<b>Lambda (Py 3.11)</b><br/>keyword search<br/>+ chat completion<br/>+ escalate"]
-
-    S3[("<b>S3</b><br/>logs + index")]
-    DDB[("<b>DynamoDB</b><br/>tickets")]
-
-    Browser -- "port 80" --> Student
-    Browser -- "port 8080" --> Admin
-
-    Student -- "AWS SDK PHP" --> Lambda
-    Admin -- "AWS SDK PHP<br/>read / write / delete" --> DDB
-
-    Lambda --> S3
-    Lambda --> DDB
-
-    classDef svc  fill:#2b3a4a,stroke:#6fa8dc,color:#e8eef7,stroke-width:2px
-    classDef db   fill:#37404a,stroke:#f4b183,color:#f8f4ee,stroke-width:2px
-    classDef user fill:#1f3a2a,stroke:#93c47d,color:#eaf4e1,stroke-width:2px
-
-    class Student,Admin,Lambda svc
-    class S3,DDB db
-    class Browser user
+```
+                              [Browser]
+                                  │
+                  ┌───────────────┼───────────────┐
+                  │ port 80       │               │ port 8080
+                  ▼               │               ▼
+        ┌──────────────────┐      │      ┌───────────────────┐
+        │ Student helpdesk │      │      │ Admin console     │
+        │ Apache + PHP 8   │      │      │ Apache + PHP 8    │
+        │ Sessions: PHP    │      │      │ Sessions: ADMIN   │
+        │ DB: upou_helpdesk│      │      │ DB: upou_admin    │
+        └────────┬─────────┘      │      └────────┬──────────┘
+                 │                │               │
+                 │ AWS SDK PHP    │               │ AWS SDK PHP
+                 ▼                │               ▼
+        ┌──────────────────┐      │      ┌───────────────────┐
+        │ Lambda (Py 3.11) │      │      │ DynamoDB scan/    │
+        │ keyword search   │──────┼─────▶│ get/update/delete │
+        │ + chat completion│      │      └───────────────────┘
+        │ + escalate       │      │
+        └────────┬─────────┘      │
+                 │                │
+        ┌────────┴─────────┐      │
+        ▼                  ▼      │
+    ┌────────┐      ┌──────────┐  │
+    │   S3   │      │ DynamoDB │  │
+    │ logs + │      │ tickets  │◀─┘
+    │ index  │      └──────────┘
+    └────────┘
 ```
 
 **Key design points:**

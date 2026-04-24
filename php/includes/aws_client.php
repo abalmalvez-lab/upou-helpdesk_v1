@@ -41,12 +41,21 @@ class AwsClient {
     }
 
     public static function invokeAi(string $question, ?string $userEmail = null): array {
+        $payload = ['question' => $question];
+        if ($userEmail !== null) {
+            $payload['user_email'] = $userEmail;
+        }
+        return self::invokeLambdaRaw($payload);
+    }
+
+    /**
+     * Generic Lambda invoke — accepts any payload dict, returns parsed response.
+     * Used by api_ask.php (action=ask), api_escalate.php (action=escalate),
+     * and api_ticket_status.php (action=ticket_status).
+     */
+    public static function invokeLambdaRaw(array $payload): array {
         $cfg = self::cfg()['aws'];
         try {
-            $payload = ['question' => $question];
-            if ($userEmail !== null) {
-                $payload['user_email'] = $userEmail;
-            }
             $result = self::lambda()->invoke([
                 'FunctionName'   => $cfg['lambda_function'],
                 'InvocationType' => 'RequestResponse',

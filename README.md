@@ -21,7 +21,7 @@ Built for AWS Academy Learner Lab. Deploys in 5–10 minutes via the included CL
 | 🟡 **General Knowledge** | No good policy match | AI answers from training, marked accordingly |
 | 🔴 **Forwarded to Human Agent** | AI explicitly cannot answer | Ticket created in DynamoDB, picked up by admin console |
 
-## Project File Structure Layout
+## Project layout
 
 ```
 upou-final/

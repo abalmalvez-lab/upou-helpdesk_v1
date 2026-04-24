@@ -19,7 +19,7 @@ cd upou-helpdesk
 chmod +x scripts/*.sh
 
 export OPENAI_API_KEY='your-key'
-export S3_BUCKET='upou-helpdesk-2026-ai-webapp-youruserid'   # globally unique, no s3:// prefix
+export S3_BUCKET='upou-helpdesk-2026-yourinitials'   # globally unique, no s3:// prefix
 
 ./scripts/bootstrap_aws.sh
 ```
@@ -113,24 +113,23 @@ sudo systemctl restart httpd
 
 ## Step 5 — Deploy the admin console (port 8080)
 
+The `deploy_admin.sh` script handles everything: SELinux port registration, Composer install, schema import (with password sync), Apache vhost setup with the correct DocumentRoot, and verification that port 8080 actually serves.
+
 ```bash
-cd /var/www/upou-helpdesk/admin
-composer install --no-dev --optimize-autoloader
+cd /var/www/upou-helpdesk
+sudo ./scripts/deploy_admin.sh
+```
 
-# Separate database for admin accounts
-ADMIN_DB_PASS=$(openssl rand -base64 16 | tr -d '=+/')
-echo "Admin DB password: $ADMIN_DB_PASS"
-sed -i "s/CHANGE_ME_STRONG_PASSWORD/$ADMIN_DB_PASS/" /var/www/upou-helpdesk/admin/sql/schema.sql
-sudo mysql -u root -p < /var/www/upou-helpdesk/admin/sql/schema.sql
+The script will prompt for your MariaDB root password once (for schema import) and print the generated admin DB password at the end. It's idempotent — safe to re-run if anything needs to change.
 
-# Install admin Apache vhost (port 8080)
-sudo cp /var/www/upou-helpdesk/admin/docs/upou-admin.conf /etc/httpd/conf.d/
-sudo sed -i "s|CHANGE_ME_STRONG_PASSWORD|$ADMIN_DB_PASS|" /etc/httpd/conf.d/upou-admin.conf
+To skip the MariaDB prompt, set the root password as an env var first:
+```bash
+export MYSQL_ROOT_PASSWORD='your-mariadb-root-password'
+sudo -E ./scripts/deploy_admin.sh
+```
 
-sudo chown -R apache:apache /var/www/upou-helpdesk/admin
-sudo systemctl restart httpd
-
-# Verify both ports listen
+When done, verify both ports are listening:
+```bash
 sudo ss -tlnp | grep -E ':(80|8080)'
 ```
 
@@ -142,20 +141,12 @@ This builds the Lambda, uploads the policy index, and runs end-to-end verificati
 cd /var/www/upou-helpdesk
 chmod +x scripts/*.sh
 export OPENAI_API_KEY='your-key'
-export OPENAI_BASE_URL='https://is215-openai.upou.io/v1'
 export S3_BUCKET='upou-helpdesk-2026-yourinitials'
 
 ./scripts/deploy_all.sh
-
-# Fixing the known bugs on admin Apache vhost (port 8080)
-./scripts/diagnose-admin-8080.sh
-
 ```
-The script prints `✓` for each step and ends with a green `=== Deploy complete ===` plus the elapsed time.
 
-Manually configuring the Lambda environment variable due to the identified bug on shell script that not accepting special character `/` of an environment variable.
-`Key: OPENAI_BASE_URL`
-`Value: https://is215-openai.upou.io/v1`
+The script prints `✓` for each step and ends with a green `=== Deploy complete ===` plus the elapsed time.
 
 ## Step 7 — Verify
 

@@ -38,7 +38,7 @@ require __DIR__ . '/../views/partials/header.php';
       <span class="source-badge <?= $cls ?>"><i class="fa-solid <?= $icon ?>"></i> <?= htmlspecialchars($label) ?></span>
       <span><?= htmlspecialchars($r['created_at']) ?></span>
       <?php if ($r['ticket_id']): ?>
-        <span><i class="fa-solid fa-ticket"></i> <?= htmlspecialchars($r['ticket_id']) ?></span>
+        <span><i class="fa-solid fa-ticket"></i> <a href="/my_tickets.php"><?= htmlspecialchars($r['ticket_id']) ?></a></span>
       <?php endif; ?>
     </div>
   </div>
