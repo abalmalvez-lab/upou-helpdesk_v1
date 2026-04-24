@@ -168,7 +168,8 @@ form.addEventListener('submit', async (e) => {
       body: JSON.stringify({ question })
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Request failed');
+    if (!res.ok) throw new Error(data.error || data.detail || 'Request failed');
+    if (!data || !data.source_label) throw new Error(data.error || 'Unexpected response from server');
 
     if (data.source_label === 'Needs Human Review') {
       // Show Yes/No confirmation instead of auto-creating a ticket

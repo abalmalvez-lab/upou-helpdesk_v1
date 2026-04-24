@@ -65,6 +65,23 @@ try {
     exit;
 }
 
+// Guard: if Lambda returned nothing parseable, return a clear error
+if (empty($result['data']) || !is_array($result['data'])) {
+    http_response_code(500);
+    echo json_encode([
+        'error' => 'Lambda returned an empty or unparseable response',
+        'raw'   => $result['data'] ?? null,
+    ]);
+    exit;
+}
+
+// If Lambda itself returned an error in the data, forward it as a 500
+if (isset($result['data']['error']) && !isset($result['data']['source_label'])) {
+    http_response_code($result['status'] ?? 500);
+    echo json_encode($result['data']);
+    exit;
+}
+
 // Optional: write per-user chat history to MySQL (best-effort, ignore failures)
 try {
     $pdo = Database::get();
