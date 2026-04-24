@@ -229,6 +229,17 @@ def _parse_body(event):
     return event
 
 
+def _ddb_to_dict(item):
+    """Convert a DynamoDB typed item to a plain dict."""
+    out = {}
+    for k, v in item.items():
+        if "S" in v: out[k] = v["S"]
+        elif "N" in v: out[k] = float(v["N"])
+        elif "BOOL" in v: out[k] = v["BOOL"]
+        else: out[k] = str(v)
+    return out
+
+
 def _response(status, payload):
     return {
         "statusCode": status,
@@ -245,6 +256,52 @@ def _response(status, payload):
 def lambda_handler(event, context):
     try:
         body = _parse_body(event)
+        action = (body.get("action") or "ask").strip()
+
+        # ---- Escalate: create ticket on user confirmation ----
+        if action == "escalate":
+            question = (body.get("question") or "").strip()
+            ai_attempt = (body.get("ai_attempt") or "").strip()
+            top_score = float(body.get("top_similarity") or 0)
+            user_email = (body.get("user_email") or "").strip() or None
+            if not question:
+                return _response(400, {"error": "Field 'question' is required."})
+            ticket_id = create_ticket(question, ai_attempt, top_score, user_email)
+            return _response(200, {
+                "ticket_id": ticket_id,
+                "status": "OPEN",
+                "message": "Your question has been forwarded to a human agent.",
+            })
+
+        # ---- Ticket status: look up by ticket_id or user_email ----
+        if action == "ticket_status":
+            ticket_id = (body.get("ticket_id") or "").strip()
+            user_email = (body.get("user_email") or "").strip()
+            if ticket_id:
+                try:
+                    resp = _ddb.get_item(TableName=TICKETS_TABLE, Key={"ticket_id": {"S": ticket_id}})
+                    item = resp.get("Item")
+                    if not item:
+                        return _response(404, {"error": "Ticket not found."})
+                    return _response(200, {"ticket": _ddb_to_dict(item)})
+                except Exception as e:
+                    return _response(500, {"error": f"DynamoDB read failed: {e}"})
+            elif user_email:
+                try:
+                    resp = _ddb.scan(
+                        TableName=TICKETS_TABLE,
+                        FilterExpression="user_email = :e",
+                        ExpressionAttributeValues={":e": {"S": user_email}},
+                    )
+                    tickets = [_ddb_to_dict(i) for i in resp.get("Items", [])]
+                    tickets.sort(key=lambda t: t.get("created_at", ""), reverse=True)
+                    return _response(200, {"tickets": tickets})
+                except Exception as e:
+                    return _response(500, {"error": f"DynamoDB scan failed: {e}"})
+            else:
+                return _response(400, {"error": "Provide ticket_id or user_email."})
+
+        # ---- Default: ask ----
         question = (body.get("question") or "").strip()
         user_email = (body.get("user_email") or "").strip() or None
         if not question:
@@ -276,10 +333,9 @@ def lambda_handler(event, context):
             source_label = "Needs Human Review"
             answer_text = (
                 "I couldn't find a confident answer to your question in the official "
-                "UPOU policies, and I don't want to guess. Your question has been "
-                "forwarded to a human agent who will follow up."
+                "UPOU policies, and I don't want to guess."
             )
-            ticket_id = create_ticket(question, raw_answer, top_score, user_email)
+            ticket_id = None  # Don't auto-create; wait for user confirmation
         elif used_policy:
             source_label = "Official Policy"
             answer_text = raw_answer
