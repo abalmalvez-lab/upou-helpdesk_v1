@@ -23,7 +23,6 @@
 #   SKIP_PHP=1           to skip PHP redeploy
 #   SKIP_LAMBDA=1        to skip Lambda code redeploy
 #   SKIP_INDEX=1         to skip policy index rebuild
-#   SKIP_ADMIN=1         to skip admin console deploy
 
 set -euo pipefail
 
@@ -127,23 +126,6 @@ if [[ "${SKIP_INDEX:-0}" != "1" ]]; then
     else
         color_err "scripts/deploy_policy_index.sh not found or not executable"
         exit 1
-    fi
-fi
-
-# ---- Phase 3.5: Admin console (port 8080) -------------------------------
-if [[ "${SKIP_ADMIN:-0}" != "1" ]]; then
-    color_phase "Phase 3.5: Admin console deploy"
-
-    if [[ -x "$PROJECT_DIR/scripts/deploy_admin.sh" ]]; then
-        # Admin script needs root privileges (modifies /etc/httpd/, runs systemctl)
-        if [[ $EUID -eq 0 ]]; then
-            "$PROJECT_DIR/scripts/deploy_admin.sh"
-        else
-            sudo -E "$PROJECT_DIR/scripts/deploy_admin.sh"
-        fi
-    else
-        color_warn "scripts/deploy_admin.sh not found or not executable; skipping admin deploy"
-        color_warn "Set SKIP_ADMIN=1 to silence this warning, or chmod +x the script"
     fi
 fi
 

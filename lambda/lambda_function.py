@@ -220,23 +220,6 @@ def write_log(record):
         return None
 
 
-def _ddb_item_to_dict(item):
-    """Convert a DynamoDB item (with type descriptors) to a plain dict."""
-    out = {}
-    for key, val in item.items():
-        if "S" in val:
-            out[key] = val["S"]
-        elif "N" in val:
-            out[key] = float(val["N"])
-        elif "BOOL" in val:
-            out[key] = val["BOOL"]
-        elif "NULL" in val:
-            out[key] = None
-        else:
-            out[key] = str(val)
-    return out
-
-
 def _parse_body(event):
     if isinstance(event, dict) and "body" in event and event["body"] is not None:
         body = event["body"]
@@ -262,60 +245,6 @@ def _response(status, payload):
 def lambda_handler(event, context):
     try:
         body = _parse_body(event)
-        action = (body.get("action") or "ask").strip()
-
-        # ---- ACTION: escalate ----
-        # Creates a DynamoDB ticket on explicit user confirmation
-        if action == "escalate":
-            question = (body.get("question") or "").strip()
-            ai_attempt = (body.get("ai_attempt") or "").strip()
-            top_score = float(body.get("top_similarity") or 0)
-            user_email = (body.get("user_email") or "").strip() or None
-            if not question:
-                return _response(400, {"error": "Field 'question' is required."})
-            ticket_id = create_ticket(question, ai_attempt, top_score, user_email)
-            return _response(200, {
-                "ticket_id": ticket_id,
-                "status": "OPEN",
-                "message": "Your question has been forwarded to a human agent who will follow up.",
-            })
-
-        # ---- ACTION: ticket_status ----
-        # Returns ticket details from DynamoDB for a given ticket_id or user_email
-        if action == "ticket_status":
-            ticket_id = (body.get("ticket_id") or "").strip()
-            user_email = (body.get("user_email") or "").strip()
-            if ticket_id:
-                # Single ticket lookup
-                try:
-                    resp = _ddb.get_item(
-                        TableName=TICKETS_TABLE,
-                        Key={"ticket_id": {"S": ticket_id}},
-                    )
-                    item = resp.get("Item")
-                    if not item:
-                        return _response(404, {"error": "Ticket not found."})
-                    ticket = _ddb_item_to_dict(item)
-                    return _response(200, {"ticket": ticket})
-                except Exception as e:
-                    return _response(500, {"error": f"DynamoDB read failed: {e}"})
-            elif user_email:
-                # All tickets for a user email (scan with filter)
-                try:
-                    resp = _ddb.scan(
-                        TableName=TICKETS_TABLE,
-                        FilterExpression="user_email = :email",
-                        ExpressionAttributeValues={":email": {"S": user_email}},
-                    )
-                    tickets = [_ddb_item_to_dict(item) for item in resp.get("Items", [])]
-                    tickets.sort(key=lambda t: t.get("created_at", ""), reverse=True)
-                    return _response(200, {"tickets": tickets})
-                except Exception as e:
-                    return _response(500, {"error": f"DynamoDB scan failed: {e}"})
-            else:
-                return _response(400, {"error": "Provide 'ticket_id' or 'user_email'."})
-
-        # ---- ACTION: ask (default) ----
         question = (body.get("question") or "").strip()
         user_email = (body.get("user_email") or "").strip() or None
         if not question:
@@ -347,11 +276,10 @@ def lambda_handler(event, context):
             source_label = "Needs Human Review"
             answer_text = (
                 "I couldn't find a confident answer to your question in the official "
-                "UPOU policies, and I don't want to guess."
+                "UPOU policies, and I don't want to guess. Your question has been "
+                "forwarded to a human agent who will follow up."
             )
-            # Do NOT auto-create ticket here — wait for user confirmation.
-            # The frontend will show a Yes/No prompt and call the escalate action.
-            ticket_id = None
+            ticket_id = create_ticket(question, raw_answer, top_score, user_email)
         elif used_policy:
             source_label = "Official Policy"
             answer_text = raw_answer
