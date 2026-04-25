@@ -203,7 +203,65 @@ git pull
 
 The `deploy_all.sh` script is idempotent — re-running it just re-syncs everything.
 
+### Uploading of SSL cert to an EC2 instance:
+
+Replace <EC2_PUBLIC_IP> with the actual IP.
+
+Windows (PowerShell or CMD):
+```bash
+scp -i C:\Users\YourName\Downloads\upou-helpdesk-key.pem ^
+  C:\Users\YourName\Downloads\upou-ssl-backup.tar.gz ^
+  ec2-user@<EC2_PUBLIC_IP>:/tmp/
+```
+
+Mac / Linux (Terminal):
+```bash
+scp -i ~/Downloads/upou-helpdesk-key.pem \
+  ~/Downloads/upou-ssl-backup.tar.gz \
+  ec2-user@<EC2_PUBLIC_IP>:/tmp/
+```
+
+Validation if the certificate has been uploaded successfully
+
+```bash
+ssh -i ~/Downloads/upou-helpdesk-key.pem ec2-user@<EC2_PUBLIC_IP>
+```
+
+```bash
+ls -lh /tmp/upou-ssl-backup.tar.gz
+```
+
+Expected results: 
+-rw-r--r-- 1 ec2-user ec2-user 45K Apr 25 10:30 /tmp/upou-ssl-backup.tar.gz
+
+
+**Fix the default SSL placeholder (one-time)**
+
+Amazon Linux ships with *ssl.conf* referencing a certificate that doesn't exist. Generate a placeholder so Apache can start:
+
+```bash
+sudo openssl req -x509 -nodes -days 365 \
+  -newkey rsa:2048 \
+  -keyout /etc/pki/tls/private/localhost.key \
+  -out /etc/pki/tls/certs/localhost.crt \
+  -subj "/CN=localhost"
+```
+
+Import the uploaded certificate file
+
+```bash
+cd /var/www/upou-helpdesk
+sudo ./scripts/ssl.sh import
+```
+
+Validation of the newly installed certificate is working as expected
+
+```bash
+curl -sk https://upouaihelp.duckdns.org/
+curl -sk https://upouaihelp.duckdns.org:8443/
+```
 ---
+
 
 ## If anything fails
 
