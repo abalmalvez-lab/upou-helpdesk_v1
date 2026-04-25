@@ -1,108 +1,106 @@
 # UPOU AI HelpDesk
 
-A full-stack AI helpdesk for UP Open University students, grounded in official policy data via keyword search, with human-agent escalation for unanswered questions.
+An intelligent helpdesk system for UP Open University students that provides instant answers to policy questions using AI, with seamless escalation to human agents when needed.
 
-Built for AWS Academy Learner Lab. Deploys in 5–10 minutes via the included CLI scripts.
+The system combines smart AI technology with official university policies to give students accurate, trustworthy answers. When the AI can't answer, questions are automatically routed to staff for personal assistance.
 
-**User Page:** https://upouaihelp.duckdns.org/ <br>
-**Admin Page:** https://upouaihelp.duckdns.org:8443
+**Student Portal:** https://upouaihelp.duckdns.org/ <br>
+**Admin Portal:** https://upouaihelp.duckdns.org:8443
 
-## What's in the box
+## System Overview
 
-- **AWS Lambda** (Python 3.11) — answers questions using a chat completion grounded in keyword search over a CSV policy knowledge base
-- **PHP/MariaDB student frontend** — bcrypt auth, chat UI with three colored answer badges, history page (Apache port 80)
-- **PHP/MariaDB admin console** — separate vhost for managing escalated tickets in DynamoDB, role-based access (admin/agent), first-signup-becomes-admin (Apache port 8080)
-- **DynamoDB** — single source of truth for escalated tickets
-- **S3** — stores the policy index and per-interaction logs
-- **CLI deploy scripts** — bootstrap AWS resources, build/deploy Lambda, build/upload policy index, full orchestration
+The UPOU AI HelpDesk is a complete solution that includes:
 
-## Three answer modes
+- **Smart AI Assistant** — Answers student questions by searching through official UPOU policies, providing accurate answers with source citations
+- **Student Portal** — Easy-to-use chat interface where students can ask questions, view their history, and track support tickets
+- **Admin Console** — Staff dashboard for managing escalated questions, assigning agents, and monitoring support performance
+- **Secure Database** — Stores all support tickets and interactions for tracking and reporting
+- **Cloud Storage** — Maintains the policy knowledge base and conversation logs
+- **Automated Setup** — Quick deployment tools that get the system running in minutes
 
-| Badge | When | What happens |
+## How It Works
+
+The AI helpdesk provides three types of responses:
+
+| Response Type | When It Happens | What Students See |
 |---|---|---|
-| 🟢 **Official Policy** | Keyword score ≥ threshold | AI answers from matched UPOU chunks, citations shown |
-| 🟡 **General Knowledge** | No good policy match | AI answers from training, marked accordingly |
-| 🔴 **Forwarded to Human Agent** | AI explicitly cannot answer | Ticket created in DynamoDB, picked up by admin console |
+| 🟢 **Official Policy Answer** | The question matches official UPOU policies | AI provides an answer with direct citations to university policies |
+| 🟡 **General Knowledge Answer** | The question doesn't match specific policies but is answerable | AI provides a helpful answer based on general knowledge, clearly labeled as such |
+| 🔴 **Human Agent Needed** | The AI cannot confidently answer the question | Student is asked if they want to forward to a staff member for personal assistance |
 
-## Project layout
+## Student Experience
 
-```
-upou-final/
-├── data/
-│   └── policies.csv               # 53 UPOU policy chunks (ENR + CAL)
-├── lambda/
-│   └── lambda_function.py         # Keyword search + chat completion + escalation
-├── scripts/
-│   ├── bootstrap_aws.sh           # One-time: create S3 bucket, DynamoDB, Lambda shell
-│   ├── build_policy_index.py      # CSV → tokenized index → S3
-│   ├── deploy_policy_index.sh     # Validate CSV, build, upload, force cold start
-│   ├── deploy_lambda.sh           # Build zip, pin runtime, upload
-│   ├── deploy_all.sh              # Orchestrator: PHP + Lambda + index + verify
-│   └── clean_csv.py               # Repair tool for broken CSV (ellipsis chunk_ids)
-├── php/                           # Student-facing app (port 80)
-│   ├── composer.json
-│   ├── includes/                  # config, db, auth, aws_client
-│   ├── views/partials/            # header, footer
-│   ├── public/                    # Apache document root
-│   │   ├── index.php login.php register.php logout.php
-│   │   ├── chat.php api_ask.php history.php
-│   │   └── assets/style.css
-│   └── sql/schema.sql             # Helpdesk users + chat_history (in /sql at top level too)
-├── admin/                         # Admin console (port 8080)
-│   ├── composer.json
-│   ├── includes/                  # config, db, auth, ticket_repo, user_repo
-│   ├── views/partials/
-│   ├── public/                    # dashboard, tickets, ticket detail, users, login, register
-│   ├── sql/schema.sql             # admin_users + audit_log
-│   └── docs/upou-admin.conf       # Apache vhost (port 8080)
-├── sql/
-│   └── schema.sql                 # Helpdesk DB schema (top-level copy)
-├── docs/
-│   ├── deploy/
-│   │   └── upou-helpdesk.conf     # Apache vhost for the student app
-│   └── wiki/
-│       ├── README.md              # Wiki index
-│       ├── user-guide.md          # Non-technical user docs
-│       ├── admin-guide.md         # Non-technical admin docs
-│       ├── architecture.md        # Technical: how the system works
-│       ├── api-reference.md       # Technical: every endpoint
-│       └── operations.md          # Technical: monitoring, logs, troubleshooting
-├── .env.example
-├── README.md                      # this file
-├── DEPLOYMENT-FAST.md             # 10-minute CLI deploy
-├── DEPLOYMENT-LONG.md             # Full step-by-step manual deploy with explanations
-└── KNOWN-ISSUES.md                # Catalog of every bug we hit and how the project prevents it
-```
+When students use the helpdesk:
 
-## Quick start
+- **Ask Questions** — Type any question about UPOU policies in the chat interface
+- **Get Instant Answers** — Receive immediate responses with source citations when available
+- **View History** — Access past questions and answers anytime
+- **Track Support Tickets** — Monitor the status of questions forwarded to staff
+- **Receive Updates** — Get notified when staff respond to escalated questions
 
-**Two paths, same destination:**
+## Staff Experience
 
-| Path | Time | When to use |
+The admin console provides staff with:
+
+- **Dashboard Overview** — See all support tickets at a glance with status summaries
+- **Ticket Management** — Assign, update, and resolve student questions
+- **Agent Coordination** — Multiple staff can work together with role-based permissions
+- **Activity Tracking** — Complete audit log of all actions taken
+- **Performance Insights** — Monitor response times and resolution rates
+
+## Getting Started
+
+Two deployment options are available:
+
+| Option | Time | Best For |
 |---|---|---|
-| **[`DEPLOYMENT-FAST.md`](DEPLOYMENT-FAST.md)** | 5–10 min | You have the prereqs, just want it deployed |
-| **[`DEPLOYMENT-LONG.md`](DEPLOYMENT-LONG.md)** | 30–45 min | First-time deploy, want explanations and manual control |
+| **Quick Deploy** | 5–10 minutes | Experienced users who want fast setup |
+| **Detailed Deploy** | 30–45 minutes | First-time setup with step-by-step guidance |
 
-Both paths produce the identical working system.
+Both options produce the same fully functional system.
 
 ## Documentation
 
-| Audience | Document |
+| For This Audience | Read This |
 |---|---|
-| **Student / end-user** | [`docs/wiki/user-guide.md`](docs/wiki/user-guide.md) |
-| **HelpDesk admin / agent** | [`docs/wiki/admin-guide.md`](docs/wiki/admin-guide.md) |
-| **Developer / DevOps** | [`docs/wiki/architecture.md`](docs/wiki/architecture.md), [`docs/wiki/operations.md`](docs/wiki/operations.md), [`docs/wiki/api-reference.md`](docs/wiki/api-reference.md) |
-| **Anyone hitting a bug** | [`KNOWN-ISSUES.md`](KNOWN-ISSUES.md) |
+| **Students** | User Guide - how to use the helpdesk |
+| **HelpDesk Staff** | Admin Guide - managing tickets and users |
+| **Technical Team** | Architecture, Operations, and API Reference documents |
+| **Troubleshooting** | Known Issues catalog |
 
-## Stack
+## Technology Stack
 
-- **Lambda runtime:** Python 3.11 (x86_64) — pinned by the deploy scripts
-- **EC2:** Amazon Linux 2023, t3.small
-- **Web server:** Apache 2.4 with PHP 8 (mod_php or PHP-FPM)
-- **Database:** MariaDB 10.5
-- **AWS region:** us-east-1
-- **OpenAI-compatible endpoint:** UPOU class proxy (`https://is215-openai.upou.io/v1`) or real OpenAI
+The system is built on modern, reliable technologies:
+
+- **Cloud Platform** — AWS (Amazon Web Services) for scalable infrastructure
+- **AI Engine** — OpenAI-compatible AI for intelligent question answering
+- **Web Server** — Apache with PHP for responsive web interfaces
+- **Database** — MariaDB for user accounts and conversation history
+- **Cloud Database** — DynamoDB for ticket management
+- **Storage** — S3 for policy knowledge base and logs
+
+## Key Features
+
+**For Students:**
+- 24/7 availability for policy questions
+- Instant answers with source citations
+- Conversation history for reference
+- Easy ticket tracking for escalated questions
+
+**For Staff:**
+- Centralized ticket management dashboard
+- Role-based access control (Admin/Agent)
+- Real-time status updates
+- Complete activity audit trail
+- Performance monitoring capabilities
+
+**For Administrators:**
+- Automated deployment tools
+- SSL certificate management
+- Diagnostic and troubleshooting utilities
+- Secure user authentication
+- Comprehensive logging
 
 ## License
 
-For educational use in UPOU IS215 coursework.
+This system is developed for educational use in UPOU IS215 coursework.

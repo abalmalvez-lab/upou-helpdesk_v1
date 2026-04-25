@@ -2,9 +2,9 @@
 
 Every HTTP endpoint and Lambda invocation contract in the UPOU AI HelpDesk.
 
-## Student app endpoints (port 80)
+## Student app endpoints (port 80 or 443)
 
-All paths are relative to `http://<EC2_HOST>/`.
+All paths are relative to `http://<EC2_HOST>/` or `https://<EC2_HOST>/`.
 
 ### `GET /` — Landing page
 
@@ -117,6 +117,98 @@ The main interaction endpoint. Called by the chat page's JavaScript.
 
 Returns the user's last 50 questions and answers as HTML.
 
+### `GET /my_tickets.php` — Ticket tracking (auth required)
+
+Returns the user's escalated tickets with status, assignee, and resolution notes.
+
+### `POST /api_escalate.php` — Confirm escalation (auth required)
+
+Called when a student clicks "Yes" to confirm escalation of a question to a human agent.
+
+**Request:**
+- `Content-Type: application/json`
+- Body:
+  ```json
+  {
+    "question": "What's my GPA in BIO101?",
+    "ai_attempt": "CANNOT_ANSWER_FROM_POLICY",
+    "top_similarity": 0.45
+  }
+  ```
+- Cookie: `PHPSESSID=<session>`
+
+**Response (success, 200):**
+```json
+{
+  "ticket_id": "ticket-uuid",
+  "status": "OPEN",
+  "message": "Ticket created successfully"
+}
+```
+
+**Side effects:**
+- Invokes Lambda with `escalate` action
+- Creates a ticket in DynamoDB
+- Updates the corresponding row in `upou_helpdesk.chat_history` with the ticket_id
+
+### `POST /api_ticket_status.php` — Get ticket status (auth required)
+
+Fetches ticket status from DynamoDB. Can retrieve a single ticket by ID or all tickets for the current user.
+
+**Request (single ticket):**
+- `Content-Type: application/json`
+- Body:
+  ```json
+  {
+    "ticket_id": "ticket-uuid"
+  }
+  ```
+
+**Request (all user tickets):**
+- `Content-Type: application/json`
+- Body:
+  ```json
+  {
+    "user_email": "student@example.com"
+  }
+  ```
+
+**Response (single ticket, 200):**
+```json
+{
+  "ticket": {
+    "ticket_id": "ticket-uuid",
+    "status": "RESOLVED",
+    "question": "What's my GPA in BIO101?",
+    "ai_attempt": "CANNOT_ANSWER_FROM_POLICY",
+    "assignee": "agent_username",
+    "resolution_notes": "Student's GPA is 1.75",
+    "created_at": "2026-04-14T10:30:00Z",
+    "updated_at": "2026-04-14T11:15:00Z",
+    "resolved_at": "2026-04-14T11:15:00Z"
+  }
+}
+```
+
+**Response (all tickets, 200):**
+```json
+{
+  "tickets": [
+    {
+      "ticket_id": "ticket-uuid-1",
+      "status": "OPEN",
+      "question": "...",
+      ...
+    },
+    ...
+  ]
+}
+```
+
+**Side effects:**
+- Invokes Lambda with `ticket_status` action
+- Queries DynamoDB for ticket data
+
 ## Admin app endpoints (port 8080)
 
 All paths are relative to `http://<EC2_HOST>:8080/`.
@@ -178,9 +270,40 @@ The Lambda is invoked by both PHP apps via `boto3.invoke()` (or `aws-sdk-php`'s 
 
 ### Request payload
 
+The Lambda supports three actions via a single endpoint. The action is determined by the presence of specific fields.
+
+#### Action: `ask` (default)
+
 ```json
 {
   "question": "When does 2nd semester 2025-2026 start?",
+  "user_email": "student@example.com"
+}
+```
+
+#### Action: `escalate`
+
+```json
+{
+  "question": "What's my GPA in BIO101?",
+  "ai_attempt": "CANNOT_ANSWER_FROM_POLICY",
+  "top_similarity": 0.45,
+  "user_email": "student@example.com"
+}
+```
+
+#### Action: `ticket_status`
+
+Single ticket:
+```json
+{
+  "ticket_id": "ticket-uuid"
+}
+```
+
+All tickets for user:
+```json
+{
   "user_email": "student@example.com"
 }
 ```

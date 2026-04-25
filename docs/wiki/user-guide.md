@@ -57,9 +57,16 @@ The AI couldn't find your question in the UPOU policies, so it answered using it
 
 ### 🔴 Forwarded to Human Agent
 
-The AI couldn't answer your question confidently. Instead of guessing, it **created a support ticket** and forwarded your question to a human helpdesk agent. You'll see a ticket ID — write it down or screenshot it. An agent will follow up.
+The AI couldn't answer your question confidently. Instead of guessing, it **asks if you want to forward your question to a human helpdesk agent**. You'll see a confirmation prompt with a "Yes" button.
 
-**Example:** Asking *"What's my current GPA?"* would get a red Forwarded to Human Agent response because that's personal information the AI cannot know.
+**Example:** Asking *"What's my current GPA?"* would show a red "Needs Human Review" badge with a confirmation prompt because that's personal information the AI cannot know.
+
+When you click **Yes** to confirm escalation:
+- A support ticket is created with a unique ticket ID
+- Your question and the AI's attempted answer are saved
+- A human agent will review and respond
+
+**Important:** The ticket is only created when you click "Yes" to confirm. If you don't confirm, no ticket is created.
 
 ## Tips for getting good answers
 
@@ -80,6 +87,27 @@ Click **History** in the top menu to see your last 50 questions and answers. Eac
 - A ticket ID if it was forwarded to a human agent
 
 This is useful if you've already asked something and want to look back at the answer without asking again.
+
+## Tracking your support tickets
+
+When you confirm escalation of a question to a human agent, a support ticket is created. You can track all your escalated tickets on the **My Tickets** page.
+
+Click **My Tickets** in the top menu to see:
+
+- All tickets you've created
+- The original question
+- The AI's attempted answer
+- Current ticket status (OPEN → IN_PROGRESS → RESOLVED → CLOSED)
+- The agent assigned to your ticket (if any)
+- Resolution notes from the agent (when resolved)
+
+**Ticket statuses:**
+- **OPEN** — Your ticket has been created and is waiting for an agent
+- **IN_PROGRESS** — An agent is actively working on your question
+- **RESOLVED** — The agent has provided an answer or solution
+- **CLOSED** — The ticket is complete (usually after you've confirmed the resolution)
+
+You can check back anytime to see if your ticket has been updated. When an agent resolves your ticket, you'll see their resolution notes explaining what they did to help.
 
 ## What to do if the system is broken
 

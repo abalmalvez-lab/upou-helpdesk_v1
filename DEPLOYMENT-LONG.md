@@ -19,42 +19,55 @@ This guide explains *why* each step exists. For just the commands without explan
 8. [Phase F — Deploy the admin console](#8-phase-f--admin)
 9. [Phase G — Build and upload the Lambda](#9-phase-g--lambda)
 10. [Phase H — Verify end-to-end](#10-phase-h--verify)
-11. [Restart procedure for new sessions](#11-restart)
-12. [Troubleshooting](#12-troubleshooting)
+11. [Phase I — SSL Certificate Setup (Optional)](#11-phase-i--ssl-certificate-setup-optional)
+12. [Restart procedure for new sessions](#12-restart)
+13. [Troubleshooting](#13-troubleshooting)
 
 ---
 
-## 1. Architecture overview
+## 1. Logical Architecture
 
-```
-                              [Browser]
-                                  │
-                  ┌───────────────┼───────────────┐
-                  │ port 80       │               │ port 8080
-                  ▼               │               ▼
-        ┌──────────────────┐      │      ┌───────────────────┐
-        │ Student helpdesk │      │      │ Admin console     │
-        │ Apache + PHP 8   │      │      │ Apache + PHP 8    │
-        │ Sessions: PHP    │      │      │ Sessions: ADMIN   │
-        │ DB: upou_helpdesk│      │      │ DB: upou_admin    │
-        └────────┬─────────┘      │      └────────┬──────────┘
-                 │                │               │
-                 │ AWS SDK PHP    │               │ AWS SDK PHP
-                 ▼                │               ▼
-        ┌──────────────────┐      │      ┌───────────────────┐
-        │ Lambda (Py 3.11) │      │      │ DynamoDB scan/    │
-        │ keyword search   │──────┼─────▶│ get/update/delete │
-        │ + chat completion│      │      └───────────────────┘
-        │ + escalate       │      │
-        └────────┬─────────┘      │
-                 │                │
-        ┌────────┴─────────┐      │
-        ▼                  ▼      │
-    ┌────────┐      ┌──────────┐  │
-    │   S3   │      │ DynamoDB │  │
-    │ logs + │      │ tickets  │◀─┘
-    │ index  │      └──────────┘
-    └────────┘
+```mermaid
+graph TD
+    Browser[Browser]
+
+    subgraph Student_App["Student Helpdesk - Port 80"]
+        StudentApache[Apache + PHP 8]
+        StudentSessions[Sessions: PHP]
+        StudentDB[DB: upou_helpdesk]
+        StudentSDK[AWS SDK PHP]
+    end
+
+    subgraph Admin_App["Admin Console - Port 8080"]
+        AdminApache[Apache + PHP 8]
+        AdminSessions[Sessions: ADMIN]
+        AdminDB[DB: upou_admin]
+        AdminSDK[AWS SDK PHP]
+    end
+
+    subgraph AWS_Services["AWS Services"]
+        Lambda[Lambda Python 3.11<br/>keyword search + chat completion + escalate]
+        S3[S3<br/>logs + policy index]
+        DynamoDB[DynamoDB<br/>tickets]
+    end
+
+    Browser -->|port 80| StudentApache
+    Browser -->|port 8080| AdminApache
+
+    StudentApache --> StudentSessions
+    StudentSessions --> StudentDB
+    StudentApache --> StudentSDK
+    StudentSDK --> Lambda
+    StudentSDK --> S3
+    StudentSDK --> DynamoDB
+
+    AdminApache --> AdminSessions
+    AdminSessions --> AdminDB
+    AdminApache --> AdminSDK
+    AdminSDK -->|scan/get/update/delete| DynamoDB
+
+    Lambda --> S3
+    Lambda --> DynamoDB
 ```
 
 **Key design points:**
@@ -206,7 +219,9 @@ aws s3 ls s3://$S3_BUCKET/policy_index.json
 6. **Network → Edit** → Create security group `upou-helpdesk-sg`:
    - SSH (22) — Source: My IP
    - HTTP (80) — Source: My IP
+   - HTTPS (443) — Source: Anywhere IPv4 (for SSL)
    - Custom TCP, Port 8080 — Source: My IP
+   - Custom TCP, Port 8443 — Source: Anywhere IPv4 (for admin SSL)
 7. **Advanced details** (scroll down) → **IAM instance profile** → **`LabInstanceProfile`**
    - This grants the EC2 instance permission to invoke Lambda, read S3, and read/write DynamoDB. No AWS access keys ever touch the instance.
 8. **Launch**
@@ -432,6 +447,41 @@ Expected output ends with:
 
 If the smoke test fails, the script exits with the actual error. The error message is the next thing to debug.
 
+### G.1 — Manual environment variable fix (known issue)
+
+The bootstrap script may have issues with special characters in environment variables. Manually configure the `OPENAI_BASE_URL` in the Lambda console:
+
+1. Lambda → `ai-webapp-handler` → **Configuration** tab → **Environment variables** → **Edit**
+2. Add or update:
+   - **Key:** `OPENAI_BASE_URL`
+   - **Value:** `https://is215-openai.upou.io/v1`
+3. **Save**
+
+### G.2 — Run the deploy orchestrator
+
+After the Lambda is deployed, run the orchestrator to upload the policy index and verify everything:
+
+```bash
+cd /var/www/upou-helpdesk
+export OPENAI_API_KEY='your-key'
+export OPENAI_BASE_URL='https://is215-openai.upou.io/v1'
+export S3_BUCKET='your-bucket-name'
+
+./scripts/deploy_all.sh
+```
+
+This builds the policy index, uploads it to S3, and runs end-to-end verification.
+
+### G.3 — Fix admin console port 8080 issues
+
+Run the diagnostic script to fix any Apache vhost issues on port 8080:
+
+```bash
+./scripts/diagnose-admin-8080.sh
+```
+
+This script checks for common issues (SELinux, DocumentRoot paths, Apache config) and applies fixes automatically.
+
 ## 10. Phase H — Verify
 
 ### H.1 — Lambda direct test
@@ -493,11 +543,89 @@ aws dynamodb scan --table-name upou-helpdesk-tickets --region us-east-1 --output
 
 If all three storage layers have data, deployment is complete.
 
-## 11. Restart
+## 11. Phase I — SSL Certificate Setup (Optional)
+
+If you want to enable HTTPS for the student portal (port 443) and admin console (port 8443), follow these steps.
+
+### I.1 — Generate a placeholder SSL certificate
+
+Amazon Linux ships with `ssl.conf` referencing a certificate that doesn't exist. Generate a placeholder so Apache can start:
+
+```bash
+sudo openssl req -x509 -nodes -days 365 \
+  -newkey rsa:2048 \
+  -keyout /etc/pki/tls/private/localhost.key \
+  -out /etc/pki/tls/certs/localhost.crt \
+  -subj "/CN=localhost"
+```
+
+### I.2 — Upload SSL certificate backup
+
+If you have an existing SSL certificate backup (e.g., from a previous deployment), upload it to the EC2 instance.
+
+**From your laptop:**
+
+Windows (PowerShell or CMD):
+```bash
+scp -i C:\Users\YourName\Downloads\upou-helpdesk-key.pem ^
+  C:\Users\YourName\Downloads\upou-ssl-backup.tar.gz ^
+  ec2-user@<EC2_PUBLIC_IP>:/tmp/
+```
+
+Mac / Linux (Terminal):
+```bash
+scp -i ~/Downloads/upou-helpdesk-key.pem \
+  ~/Downloads/upou-ssl-backup.tar.gz \
+  ec2-user@<EC2_PUBLIC_IP>:/tmp/
+```
+
+**On EC2, verify upload:**
+```bash
+ls -lh /tmp/upou-ssl-backup.tar.gz
+```
+
+Expected output: `-rw-r--r-- 1 ec2-user ec2-user 45K [date] /tmp/upou-ssl-backup.tar.gz`
+
+### I.3 — Import the SSL certificate
+
+```bash
+cd /var/www/upou-helpdesk
+sudo ./scripts/ssl.sh import
+```
+
+This script detects the uploaded certificate in common locations and restores it to the correct paths.
+
+### I.4 — Verify SSL is working
+
+```bash
+curl -sk https://upouaihelp.duckdns.org/
+curl -sk https://upouaihelp.duckdns.org:8443/
+```
+
+If both commands return HTML content without errors, SSL is configured correctly.
+
+### I.5 — Alternative: Obtain new SSL certificate
+
+If you don't have a backup and want to obtain a new SSL certificate from Let's Encrypt:
+
+```bash
+cd /var/www/upou-helpdesk
+sudo ./scripts/ssl.sh setup
+```
+
+This will:
+- Install certbot if not present
+- Obtain certificates for your domains
+- Configure Apache HTTPS vhosts
+- Set up auto-renewal
+
+The script supports multiple domains (configured at the top of `ssl.sh`).
+
+## 12. Restart
 
 See [`DEPLOYMENT-FAST.md`](DEPLOYMENT-FAST.md) "Restarting after a Learner Lab session expires." Same procedure — Apache and MariaDB auto-start, you just need to update the security group's My IP rule.
 
-## 12. Troubleshooting
+## 13. Troubleshooting
 
 See [`KNOWN-ISSUES.md`](KNOWN-ISSUES.md) for the full catalog. Top three by frequency:
 

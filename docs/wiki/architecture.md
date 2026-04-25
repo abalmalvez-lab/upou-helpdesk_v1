@@ -2,39 +2,51 @@
 
 Technical documentation for developers and DevOps engineers maintaining the UPOU AI HelpDesk.
 
-## System overview
+## System Architecture Overview
 
 The UPOU AI HelpDesk is a multi-tier application that combines a PHP web frontend with an AWS Lambda backend, using DynamoDB for ticket persistence and S3 for the policy knowledge base.
 
-```
-                              [Browser]
-                                  │
-                  ┌───────────────┼───────────────┐
-                  │ port 80       │               │ port 8080
-                  ▼               │               ▼
-        ┌──────────────────┐      │      ┌───────────────────┐
-        │ Student helpdesk │      │      │ Admin console     │
-        │ Apache + PHP 8   │      │      │ Apache + PHP 8    │
-        │ Sessions: PHP    │      │      │ Sessions: ADMIN   │
-        │ DB: upou_helpdesk│      │      │ DB: upou_admin    │
-        └────────┬─────────┘      │      └────────┬──────────┘
-                 │                │               │
-                 │ AWS SDK PHP    │               │ AWS SDK PHP
-                 ▼                │               ▼
-        ┌──────────────────┐      │      ┌───────────────────┐
-        │ Lambda (Py 3.11) │      │      │ DynamoDB CRUD     │
-        │ keyword search   │──────┼─────▶│ (read/write/delete│
-        │ + chat completion│      │      │  via SDK)         │
-        │ + escalate       │      │      └───────────────────┘
-        └────────┬─────────┘      │
-                 │                │
-        ┌────────┴─────────┐      │
-        ▼                  ▼      │
-    ┌────────┐      ┌──────────┐  │
-    │   S3   │      │ DynamoDB │  │
-    │ logs + │      │ tickets  │◀─┘
-    │ index  │      └──────────┘
-    └────────┘
+```mermaid
+graph TD
+    Browser[Browser]
+
+    subgraph Student_App["Student Helpdesk - Port 80/443"]
+        StudentApache[Apache + PHP 8]
+        StudentSessions[Sessions: PHP]
+        StudentDB[DB: upou_helpdesk]
+        StudentSDK[AWS SDK PHP]
+    end
+
+    subgraph Admin_App["Admin Console - Port 8080/8443"]
+        AdminApache[Apache + PHP 8]
+        AdminSessions[Sessions: ADMIN]
+        AdminDB[DB: upou_admin]
+        AdminSDK[AWS SDK PHP]
+    end
+
+    subgraph AWS_Services["AWS Services"]
+        Lambda[Lambda Python 3.11<br/>keyword search + chat completion + escalate + ticket_status]
+        S3[S3<br/>logs + policy index]
+        DynamoDB[DynamoDB<br/>tickets]
+    end
+
+    Browser -->|port 80/443| StudentApache
+    Browser -->|port 8080/8443| AdminApache
+
+    StudentApache --> StudentSessions
+    StudentSessions --> StudentDB
+    StudentApache --> StudentSDK
+    StudentSDK --> Lambda
+    StudentSDK --> S3
+    StudentSDK --> DynamoDB
+
+    AdminApache --> AdminSessions
+    AdminSessions --> AdminDB
+    AdminApache --> AdminSDK
+    AdminSDK -->|read/write/delete| DynamoDB
+
+    Lambda --> S3
+    Lambda --> DynamoDB
 ```
 
 ## Components
@@ -61,6 +73,8 @@ A single instance hosts both PHP applications and serves all web traffic. Apache
 3. `_policy_index = None` — cached lazily on first invocation
 
 **Per-invocation sequence:**
+
+For `ask` action:
 1. Parse the event body (handles both direct invoke and API Gateway / Function URL shapes)
 2. Tokenize the question
 3. If `_policy_index is None`, fetch `policy_index.json` from S3 and cache it
@@ -68,9 +82,19 @@ A single instance hosts both PHP applications and serves all web traffic. Apache
 5. Take the top 3, build a prompt with the chunks as system message context, send to chat completion
 6. Parse the response defensively (handle `None`, missing choices, missing usage)
 7. Classify: 🟢 Official Policy / 🟡 General Knowledge / 🔴 Needs Human Review
-8. If escalating, write a ticket to DynamoDB
-9. Always write an interaction log JSON to S3
-10. Return the answer + metadata as JSON
+8. Always write an interaction log JSON to S3
+9. Return the answer + metadata as JSON
+
+For `escalate` action:
+1. Parse the event body (question, ai_attempt, top_similarity, user_email)
+2. Create a ticket in DynamoDB with status OPEN
+3. Return ticket_id and status
+
+For `ticket_status` action:
+1. Parse the event body (ticket_id or user_email)
+2. If ticket_id provided: fetch single ticket from DynamoDB
+3. If user_email provided: scan DynamoDB for all tickets with that email
+4. Return ticket data
 
 The defensive `call_chat()` helper is critical because the UPOU class proxy sometimes returns `usage: null` or missing fields that real OpenAI always includes.
 

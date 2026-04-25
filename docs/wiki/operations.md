@@ -77,6 +77,65 @@ Should print `source_label: Official Policy` and a date.
 
 ## Common operational tasks
 
+### Manage SSL certificates
+
+The system supports HTTPS for both the student portal (port 443) and admin console (port 8443).
+
+**Generate a placeholder SSL certificate:**
+```bash
+sudo openssl req -x509 -nodes -days 365 \
+  -newkey rsa:2048 \
+  -keyout /etc/pki/tls/private/localhost.key \
+  -out /etc/pki/tls/certs/localhost.crt \
+  -subj "/CN=localhost"
+```
+
+**Obtain new SSL certificates from Let's Encrypt:**
+```bash
+cd /var/www/upou-helpdesk
+sudo ./scripts/ssl.sh setup
+```
+
+This installs certbot, obtains certificates for your domains, configures Apache HTTPS vhosts, and sets up auto-renewal.
+
+**Export SSL certificates (for backup or migration):**
+```bash
+cd /var/www/upou-helpdesk
+sudo ./scripts/ssl.sh export
+```
+
+Creates `upou-ssl-backup.tar.gz` with certificates and vhost configurations.
+
+**Import SSL certificates (restore from backup):**
+```bash
+# Upload the backup to /tmp/ first
+sudo ./scripts/ssl.sh import
+```
+
+**Verify SSL is working:**
+```bash
+curl -sk https://upouaihelp.duckdns.org/
+curl -sk https://upouaihelp.duckdns.org:8443/
+```
+
+### Diagnose and fix admin console port 8080 issues
+
+If the admin console is not accessible on port 8080:
+
+```bash
+cd /var/www/upou-helpdesk
+sudo ./scripts/diagnose-admin-8080.sh
+```
+
+This script automatically:
+- Verifies Apache is listening on 8080
+- Checks vhost file exists and has correct contents
+- Verifies admin app files exist at DocumentRoot
+- Runs Apache config test
+- Fixes DocumentRoot path mismatches
+- Applies SELinux port registration if needed
+- Restarts Apache if changes were made
+
 ### Update the policy CSV and rebuild the index
 
 When UPOU publishes new policies (e.g. a new academic calendar):

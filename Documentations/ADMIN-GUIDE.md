@@ -6,7 +6,7 @@ A guide for HelpDesk admins and agents who handle escalated tickets in the UPOU 
 
 When the AI HelpDesk can't answer a student's question, it forwards the question to a human as a "ticket." The admin console is where you handle those tickets — claim them, resolve them, and document what you did.
 
-The admin console runs on **port 8080** of the same server as the student helpdesk. The student/guest site is at `http://example.com/`, the admin console is at `http://example.com:8080/`.
+The admin console runs on **port 8080 or port 8443** of the same server as the student helpdesk. If the student site is at `http://example.com or https://example.com`, the admin console is at `http://example.com:8080/ or https://example.com:8443/`. The faculty staff / Website Support Administrator will give you the exact URL.
 
 ## Roles: admin vs agent
 

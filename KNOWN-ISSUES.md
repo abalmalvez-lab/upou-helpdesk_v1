@@ -332,6 +332,204 @@ where `$ADMIN_DIR` is the script's auto-detected path to the admin folder. Works
 
 ---
 
+## I27 — `OPENAI_BASE_URL` environment variable not set by bootstrap script
+
+**Symptom:** Lambda returns 401 authentication errors or "Invalid API key" even though the key is correct.
+
+**Root cause:** The `bootstrap_aws.sh` script may have issues with special characters (like `/`) in environment variable values, causing `OPENAI_BASE_URL` to not be set correctly or at all.
+
+**Prevention:**
+- Manually configure the `OPENAI_BASE_URL` in the Lambda console after bootstrap
+- Deployment guides include this as a known workaround step
+
+**Manual fix:**
+1. Lambda console → `ai-webapp-handler` → Configuration tab → Environment variables → Edit
+2. Add or update:
+   - **Key:** `OPENAI_BASE_URL`
+   - **Value:** `https://is215-openai.upou.io/v1`
+3. Save
+
+---
+
+## I28 — Apache fails to start due to missing SSL certificate
+
+**Symptom:** `httpd` fails to start with SSL-related errors in the logs, or Apache starts but HTTPS doesn't work.
+
+**Root cause:** Amazon Linux ships with `ssl.conf` referencing a certificate (`/etc/pki/tls/certs/localhost.crt`) that doesn't exist by default. Apache cannot start SSL vhosts without a valid certificate.
+
+**Prevention:** The deployment guides include a step to generate a placeholder self-signed certificate before configuring SSL:
+```bash
+sudo openssl req -x509 -nodes -days 365 \
+  -newkey rsa:2048 \
+  -keyout /etc/pki/tls/private/localhost.key \
+  -out /etc/pki/tls/certs/localhost.crt \
+  -subj "/CN=localhost"
+```
+
+**Manual fix:** Run the above command to generate the placeholder certificate, then restart Apache: `sudo systemctl restart httpd`
+
+---
+
+## I29 — Security group blocks access after lab session restart
+
+**Symptom:** After starting a new lab session, you cannot SSH into the EC2 instance or access the web applications.
+
+**Root cause:** When you start a new lab session, your public IP address changes. The security group's "My IP" rule still has your old IP address, blocking access from your new location.
+
+**Prevention:** The deployment guides include this in the restart procedure as a required step.
+
+**Manual fix:**
+1. EC2 → Security Groups → `upou-helpdesk-sg` → Edit inbound rules
+2. For each rule with "My IP" as source, click and re-select "My IP" to update it to your current IP
+3. Save changes
+
+---
+
+## I30 — Port 8080 not listening despite SELinux fix
+
+**Symptom:** `sudo ss -tlnp | grep ':8080'` returns nothing, even after running `semanage port -a -t http_port_t -p tcp 8080`.
+
+**Root cause:** Multiple possible causes:
+1. Apache vhost file has syntax errors
+2. DocumentRoot path in vhost doesn't match actual file location
+3. Apache configuration test failed but was ignored
+4. Apache didn't restart after vhost changes
+
+**Prevention:** `scripts/diagnose-admin-8080.sh` automatically checks all these conditions and applies fixes:
+- Verifies Apache is listening on 8080
+- Checks vhost file exists and has correct contents
+- Verifies admin app files exist at DocumentRoot
+- Runs Apache config test
+- Fixes DocumentRoot path mismatches
+- Applies SELinux port registration if needed
+- Restarts Apache if changes were made
+
+**Manual fix:** Run the diagnostic script:
+```bash
+cd /var/www/upou-helpdesk
+sudo ./scripts/diagnose-admin-8080.sh
+```
+
+---
+
+## I31 — SSL certificate upload fails or file not found
+
+**Symptom:** `ls -lh /tmp/upou-ssl-backup.tar.gz` returns "No such file or directory" after attempting to upload SSL certificate.
+
+**Root cause:**
+1. SCP command failed silently (wrong key path, wrong EC2 IP, network issue)
+2. File path on local machine is incorrect
+3. File permissions prevented upload
+4. EC2 instance not accessible from current network
+
+**Prevention:** The deployment guides include verification steps after upload.
+
+**Manual fix:**
+1. Verify the file exists locally: `ls -lh ~/Downloads/upou-ssl-backup.tar.gz`
+2. Verify EC2 IP is correct and instance is running
+3. Verify key file path is correct
+4. Test SSH connection first: `ssh -i ~/Downloads/upou-helpdesk-key.pem ec2-user@<EC2_IP>`
+5. Retry SCP with verbose flag to see errors:
+   ```bash
+   scp -v -i ~/Downloads/upou-helpdesk-key.pem \
+     ~/Downloads/upou-ssl-backup.tar.gz \
+     ec2-user@<EC2_PUBLIC_IP>:/tmp/
+   ```
+
+---
+
+## I32 — SSL import script cannot find uploaded certificate
+
+**Symptom:** `sudo ./scripts/ssl.sh import` returns "No SSL backup found in common upload locations."
+
+**Root cause:** The `ssl.sh import` script looks for the backup file in specific locations (`/tmp/`, `~/Downloads/`, current directory). If you uploaded it elsewhere, the script won't find it.
+
+**Prevention:** The deployment guides specify uploading to `/tmp/` as the standard location.
+
+**Manual fix:**
+1. Move the file to a location the script checks:
+   ```bash
+   sudo mv /path/to/upou-ssl-backup.tar.gz /tmp/
+   ```
+2. Or manually extract and place certificates:
+   ```bash
+   cd /tmp
+   tar -xzf upou-ssl-backup.tar.gz
+   sudo cp certs/* /etc/pki/tls/certs/
+   sudo cp private/* /etc/pki/tls/private/
+   sudo systemctl restart httpd
+   ```
+
+---
+
+## I33 — Lambda escalates all questions (cached policy index)
+
+**Symptom:** Every question returns "Needs Human Review" even simple policy questions that should have answers.
+
+**Root cause:** The Lambda cached an old or empty policy index on cold start. Warm containers reuse the stale cache. The index in S3 may be correct, but Lambda never reloads it.
+
+**Prevention:** `deploy_policy_index.sh` bumps a `CACHE_BUST` environment variable after uploading a new index, forcing all Lambda containers to cold-start and reload from S3.
+
+**Manual fix:**
+1. Re-run the policy index deployment:
+   ```bash
+   cd /var/www/upou-helpdesk
+   ./scripts/deploy_policy_index.sh
+   ```
+2. Or manually force a cold start by changing any Lambda environment variable (e.g., add a dummy `CACHE_BUST` with a new timestamp)
+
+---
+
+## I34 — Composer install fails with "Your requirements could not be resolved"
+
+**Symptom:** `composer install` fails with dependency resolution errors or "Package not found" messages.
+
+**Root cause:**
+1. Network connectivity issues to packagist.org
+2. PHP version incompatible with package requirements
+3. `composer.json` has conflicting dependency versions
+4. Composer cache is corrupted
+
+**Prevention:** The deployment guides use `--no-dev --optimize-autoloader` flags and specify compatible PHP versions.
+
+**Manual fix:**
+1. Clear composer cache: `composer clear-cache`
+2. Update composer: `composer self-update`
+3. Try with verbose output: `composer install -vvv --no-dev --optimize-autoloader`
+4. If network issue, try using a different mirror:
+   ```bash
+   composer config -g repo.packagist composer https://packagist.org
+   ```
+
+---
+
+## I35 — MariaDB root password lost or forgotten
+
+**Symptom:** Cannot access MySQL to run schema imports or create databases. `mysql -u root -p` always fails.
+
+**Root cause:** The password set during `mysql_secure_installation` was not recorded or was lost.
+
+**Prevention:** The deployment guides explicitly tell you to write down the MariaDB root password when setting it.
+
+**Manual fix:**
+1. Stop MariaDB: `sudo systemctl stop mariadb`
+2. Start in safe mode: `sudo mysqld_safe --skip-grant-tables &`
+3. Connect without password: `mysql -u root`
+4. Reset password:
+   ```sql
+   FLUSH PRIVILEGES;
+   ALTER USER 'root'@'localhost' IDENTIFIED BY 'new-strong-password';
+   FLUSH PRIVILEGES;
+   EXIT;
+   ```
+5. Stop safe mode and restart normally:
+   ```bash
+   sudo pkill mysqld
+   sudo systemctl start mariadb
+   ```
+
+---
+
 Every issue above is either:
 
 1. **Prevented at deploy time** — the script refuses to run in a known-broken state (e.g. wrong runtime, wrong env vars, wrong CSV)
