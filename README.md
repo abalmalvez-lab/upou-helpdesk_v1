@@ -4,6 +4,9 @@ A full-stack AI helpdesk for UP Open University students, grounded in official p
 
 Built for AWS Academy Learner Lab. Deploys in 5–10 minutes via the included CLI scripts.
 
+**User Page:** https://upouaihelp.duckdns.org/ <br>
+**Admin Page:** https://upouaihelp.duckdns.org:8443
+
 ## What's in the box
 
 - **AWS Lambda** (Python 3.11) — answers questions using a chat completion grounded in keyword search over a CSV policy knowledge base
