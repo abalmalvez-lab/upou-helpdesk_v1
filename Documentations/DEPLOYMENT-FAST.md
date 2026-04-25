@@ -37,8 +37,10 @@ In the AWS console:
 5. Key pair: create `upou-helpdesk-key`, download .pem
 6. Security group: new `upou-helpdesk-sg`, inbound rules:
    - SSH (22) — My IP
-   - HTTP (80) — My IP
-   - Custom TCP (8080) — My IP
+   - HTTP (80) — Custom Anywhere IPv4
+   - HTTPS (443) — Custom Anywhere IPv4
+   - Custom TCP (8080) — Custom Anywhere IPv4
+   - Custom TCP (8443) — Custom Anywhere IPv4
 7. **Advanced details → IAM instance profile → `LabInstanceProfile`**
 8. Launch, copy the public IP
 
