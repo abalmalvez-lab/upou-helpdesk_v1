@@ -157,52 +157,6 @@ Manually configuring the Lambda environment variable due to the identified bug o
 `Key: OPENAI_BASE_URL`
 `Value: https://is215-openai.upou.io/v1`
 
-## Step 7 — Verify
-
-### Student app (port 80)
-1. Visit `http://<EC2_PUBLIC_IP>/`
-2. Sign up
-3. Ask: *"When does 2nd semester 2025-2026 start?"* → 🟢 **Official Policy** badge with date
-
-### Admin app (port 8080)
-1. Visit `http://<EC2_PUBLIC_IP>:8080/`
-2. Sign up — **first signup becomes admin**
-3. Dashboard shows ticket counts (zero unless someone has triggered escalation)
-
-### Trigger an escalation
-1. Back at the student app, ask: *"What is my GPA in BIO101?"*
-2. Should return 🔴 **Forwarded to Human Agent** with a ticket ID
-3. Reload the admin dashboard — ticket count goes up by 1
-4. Click the ticket → claim it → mark resolved → confirm DynamoDB has the updates:
-   ```bash
-   aws dynamodb scan --table-name upou-helpdesk-tickets --region us-east-1 \
-     --query 'Items[*].[ticket_id.S,status.S,assignee.S]' --output table
-   ```
-
-If all checks pass, you're done.
-
----
-
-## Restarting after a Learner Lab session expires
-
-Lab sessions expire ~4 hours. EC2 instance is stopped; everything else persists.
-
-```bash
-# 1. Start the lab → AWS console
-# 2. EC2 → start the stopped upou-helpdesk instance, get new public IP
-# 3. EC2 → Security Groups → upou-helpdesk-sg → update both rules' source to "My IP"
-# 4. Visit http://<NEW_IP>/ — Apache + MariaDB auto-start
-```
-
-If you updated the source code in git, on the EC2:
-```bash
-cd /var/www/upou-helpdesk
-git pull
-./scripts/deploy_all.sh
-```
-
-The `deploy_all.sh` script is idempotent — re-running it just re-syncs everything.
-
 ### Uploading of SSL cert to an EC2 instance:
 
 Replace <EC2_PUBLIC_IP> with the actual IP.
@@ -234,7 +188,6 @@ ls -lh /tmp/upou-ssl-backup.tar.gz
 Expected results: 
 -rw-r--r-- 1 ec2-user ec2-user 45K Apr 25 10:30 /tmp/upou-ssl-backup.tar.gz
 
-
 **Fix the default SSL placeholder (one-time)**
 
 Amazon Linux ships with *ssl.conf* referencing a certificate that doesn't exist. Generate a placeholder so Apache can start:
@@ -260,7 +213,56 @@ Validation of the newly installed certificate is working as expected
 curl -sk https://upouaihelp.duckdns.org/
 curl -sk https://upouaihelp.duckdns.org:8443/
 ```
+
+## Step 7 — Verify
+
+### Student app (port 80)
+1. Visit `http://<EC2_PUBLIC_IP>/`
+2. Sign up
+3. Ask: *"When does 2nd semester 2025-2026 start?"* → 🟢 **Official Policy** badge with date
+
+### Admin app (port 8080)
+1. Visit `http://<EC2_PUBLIC_IP>:8080/`
+2. Sign up — **first signup becomes admin**
+3. Dashboard shows ticket counts (zero unless someone has triggered escalation)
+
+### Trigger an escalation
+1. Back at the student app, ask: *"What is my GPA in BIO101?"*
+2. Should return 🔴 **Forwarded to Human Agent** with a ticket ID
+3. Reload the admin dashboard — ticket count goes up by 1
+4. Click the ticket → claim it → mark resolved → confirm DynamoDB has the updates:
+   ```bash
+   aws dynamodb scan --table-name upou-helpdesk-tickets --region us-east-1 \
+     --query 'Items[*].[ticket_id.S,status.S,assignee.S]' --output table
+   ```
+
+
+
+
+If all checks pass, you're done.
+
+
 ---
+
+## Restarting after a Learner Lab session expires
+
+Lab sessions expire ~4 hours. EC2 instance is stopped; everything else persists.
+
+```bash
+# 1. Start the lab → AWS console
+# 2. EC2 → start the stopped upou-helpdesk instance, get new public IP
+# 3. EC2 → Security Groups → upou-helpdesk-sg → update both rules' source to "My IP"
+# 4. Visit http://<NEW_IP>/ — Apache + MariaDB auto-start
+```
+
+If you updated the source code in git, on the EC2:
+```bash
+cd /var/www/upou-helpdesk
+git pull
+./scripts/deploy_all.sh
+```
+
+The `deploy_all.sh` script is idempotent — re-running it just re-syncs everything.
 
 
 ## If anything fails
