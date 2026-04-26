@@ -233,13 +233,13 @@ curl -sk https://upouaihelp.duckdns.org:8443/
 
 ## Step 7 — Verify
 
-### Student app (port 80)
-1. Visit `http://<EC2_PUBLIC_IP>/`
+### Student app (port 80 and port 443)
+1. Visit `http://<EC2_PUBLIC_IP>/` and `https://<EC2_PUBLIC_IP>/`
 2. Sign up
 3. Ask: *"When does 2nd semester 2025-2026 start?"* → 🟢 **Official Policy** badge with date
 
-### Admin app (port 8080)
-1. Visit `http://<EC2_PUBLIC_IP>:8080/`
+### Admin app (port 8080 and port 8443)
+1. Visit `http://<EC2_PUBLIC_IP>:8080/` and `https://<EC2_PUBLIC_IP>:8443/`
 2. Sign up — **first signup becomes admin**
 3. Dashboard shows ticket counts (zero unless someone has triggered escalation)
 
