@@ -42,7 +42,22 @@ In the AWS console:
    - Custom TCP (8080) — Custom Anywhere IPv4
    - Custom TCP (8443) — Custom Anywhere IPv4
 7. **Advanced details → IAM instance profile → `LabInstanceProfile`**
-8. Launch, copy the public IP
+
+**Create and attach an Elastic IP**
+
+1. Go to EC2 Console → Network & Security → Elastic IPs.
+2. Click Allocate Elastic IP address.
+3. Keep the default setting: Amazon’s pool of IPv4 addresses.
+4. Click Allocate.
+5. Select the newly created Elastic IP.
+6. Click Actions → Associate Elastic IP address.
+7. Under Resource type, choose Instance.
+8. Under Instance, select upou-helpdesk.
+9. Under Private IP address, select the available private IP of the instance.
+10. Click Associate.
+11. Copy the new Elastic IP address and use it as the permanent public IP for accessing the server.
+
+12. Launch, copy the public IP on the internet browser <u>(both HTTP and HTTPS for user and admin facing landing pages)</u>.
 
 ## Step 3 — Install LAMP and deploy on EC2
 
